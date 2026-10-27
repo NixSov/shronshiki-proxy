@@ -1,33 +1,38 @@
-# shronshiki-proxy
+# Посредник Shronshiki → Supabase (Deno Deploy)
 
-Посредник между приложением [Shronshiki](https://github.com/NixSov/EXP1/tree/claude/shronshiki-voice-chat-7xg4o3/Shronshiki)
-и Supabase для сетей, где `*.supabase.co` недоступен без VPN. Работает на Deno Deploy.
+Нужен, когда у провайдера `*.supabase.co` недоступен или очень медленный
+(Supabase работает через Cloudflare, а соединения с ним часть российских
+операторов режет). Deno Deploy из России доступен — проверено «Проверкой
+площадок» в приложении.
 
-- Пересылает только `/auth/v1/*` и `/rest/v1/*` в один проект Supabase.
-- `GET /health` — проверка (ответ `ok`).
-- Ключей не хранит: приложение передаёт свой publishable key, как и при прямом подключении.
+Пересылает только `/auth/v1/*` и `/rest/v1/*` в один проект Supabase.
+`GET /health` — проверка доступности. Ключей не хранит.
 
-## Настройка в Deno Deploy
+## Развёртывание
 
-Переменная окружения (Settings → Environment Variables, контекст Production):
+Deno Deploy пока не запускает код из подпапки, поэтому `main.ts` кладётся
+в отдельный репозиторий (в его корень).
 
-| Имя | Значение |
-|---|---|
-| `SUPABASE_URL` | `https://<проект>.supabase.co` |
+1. console.deno.com → войти через GitHub → создать организацию.
+2. **+ New App** → выбрать репозиторий с `main.ts` → **Create App**.
+3. Настройки приложения → **Environment Variables** → **+ Add variable**:
+   `SUPABASE_URL` = `https://<проект>.supabase.co`, контекст *Production* → **Save**.
+4. Открыть адрес приложения + `/health` — должно быть `ok`.
+5. Адрес приложения вписать в Shronshiki: **Настройки → Supabase и TURN → Посредник**
+   (или `PROXY_URL` в `config/app_config.json` при сборке).
 
-Исходник и описание: `Shronshiki/proxy/` в репозитории EXP1.
+## Локальная проверка
 
-## Письма об упоминаниях (необязательно)
+```bash
+SUPABASE_URL=https://<проект>.supabase.co deno run --allow-net --allow-env main.ts
+curl http://localhost:8000/health
+```
 
-Раз в минуту (`Deno.cron`) посредник забирает из базы упоминания, которые никто
-не увидел в приложении за 90 секунд, и передаёт их скрипту Google Apps Script
-(`mail_apps_script.gs`), который отправляет письма из Gmail. Deno Deploy сам почту
-не отправляет (порты SMTP закрыты).
+## Лимиты бесплатного тарифа
 
-| Переменная | Значение |
-|---|---|
-| `SUPABASE_KEY` | publishable key проекта |
-| `NOTIFY_SECRET` | секрет из SQL-миграции `mentions` |
-| `MAIL_WEBHOOK_URL` | адрес веб-приложения Apps Script (`…/exec`) |
-
-Без этих переменных посредник работает как раньше, писем не шлёт.
+У Deno Deploy Free есть месячные лимиты: 1 млн запросов, 20 ГБ трафика, 10 часов
+процессора и 150 ГБ·ч памяти (около 200 часов, пока посредник запущен). Посредник
+запущен, пока к нему идут запросы, и выключается через 20–30 секунд тишины.
+Поэтому приложение опрашивает сервер редко, когда все уже соединились (раз в 5 с),
+а упоминания проверяет раз в 2 минуты. Расход виден в console.deno.com → Usage.
+При превышении Deno приостанавливает приложение (`USAGE_EXCEEDED`).

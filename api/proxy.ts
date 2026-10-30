@@ -19,6 +19,9 @@ export default function (req: Request): Promise<Response> {
   const original = url.searchParams.get("__path");
   if (original !== null) {
     url.searchParams.delete("__path");
+    // Vercel ещё и сам дописывает параметр маршрута (path=…) — для Supabase это
+    // был бы фильтр по несуществующему столбцу.
+    if (url.searchParams.get("path") === original) url.searchParams.delete("path");
     url.pathname = `/api/${original}`;
     req = new Request(url, req);
   }
